@@ -308,6 +308,8 @@ def main(args):
 
     # build dataset
     _, mapping_vn2act = generate_label_map(args.dataset)
+    # print("args", args)
+    # os._exit(os.EX_OK)
     if args.dataset == 'ek100_cls':
         args.mapping_act2v = {i: int(vn.split(':')[0]) for (vn, i) in mapping_vn2act.items()}
         args.mapping_act2n = {i: int(vn.split(':')[1]) for (vn, i) in mapping_vn2act.items()}
@@ -345,6 +347,7 @@ def main(args):
         num_workers=args.workers, pin_memory=False, sampler=val_sampler, drop_last=False
     )
     print('len(val_loader) = {}'.format(len(val_loader)))
+    print('len(val_dataset) = {}'.format(len(val_dataset)))
 
     if args.evaluate:
         val_stats = validate(val_loader, val_transform_gpu, model, args, len(val_dataset))
@@ -525,6 +528,9 @@ def validate(val_loader, transform_gpu, model, args, num_videos):
         with torch.no_grad():
             end = time.time()
             for i, (videos, targets) in enumerate(val_loader):
+                print(f"Processing batch {i+1}/{len(val_loader)}")
+                print(f"Videos shape: {videos.shape}")
+                print(f"Targets shape: {targets.shape}")
                 # measure data loading time
                 data_time.update(time.time() - end)
                 if isinstance(videos, torch.Tensor):
@@ -541,8 +547,11 @@ def validate(val_loader, transform_gpu, model, args, num_videos):
                 probs_allcrops = torch.softmax(logits_allcrops, dim=2)
                 targets = targets.cuda(args.gpu, non_blocking=True)
                 targets_repeated = torch.repeat_interleave(targets, len(videos))
+                
+                # print(logits_allcrops, targets_repeated)
 
                 acc1, acc5 = accuracy(torch.flatten(logits_allcrops, 0, 1), targets_repeated, topk=(1, 5))
+                print(f"Batch {i+1} Acc@1: {acc1.item()} Acc@5: {acc5.item()}")
                 metrics['Acc@1'].update(acc1.item(), targets_repeated.size(0))
                 metrics['Acc@5'].update(acc5.item(), targets_repeated.size(0))
 

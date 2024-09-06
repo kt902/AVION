@@ -52,8 +52,16 @@ def video_loader(root, vid, ext, second, end_second,
                  fast_rcc=False, rcc_params=(224, ),
                  jitter=False):
     assert fps > 0, 'fps should be greater than 0'
-
-    if chunk_len == -1:
+    
+    # CHANGES
+    is_abs_path = osp.isabs(vid)
+    if is_abs_path:
+        root = osp.dirname(vid)
+        vid = osp.splitext(osp.basename(vid))[0] # file name only
+        ext = "mp4"
+    
+    # CHANGES
+    if is_abs_path or chunk_len == -1:
         vr = get_video_reader(
             osp.join(root, '{}.{}'.format(vid, ext)),
             num_threads=threads,
@@ -141,11 +149,22 @@ class VideoCaptionDatasetBase(torch.utils.data.Dataset):
                 _ = next(csv_reader)  # skip the header
                 for row in csv_reader:
                     pid, vid = row[1:3]
-                    start_timestamp, end_timestamp = datetime2sec(row[4]), datetime2sec(row[5])
+                    try:
+                        start_timestamp, end_timestamp = datetime2sec(row[4]), datetime2sec(row[5])
+                    except Exception as e:
+                        print(e)
+                        print("failed at", metadata, row)
+                        raise e
                     narration = row[8]
                     verb, noun = int(row[10]), int(row[12])
-                    vid_path = '{}/{}'.format(pid, vid)
-                    fps = fps_dict[osp.join(self.root, vid_path + '.MP4')]
+                    
+                    # CHANGES
+                    if len(vid.split("_")) == 4:
+                        vid_path = f"/home/ec2-user/environment/my-dissertation/augmentation-pipeline/out/generated/{vid}.mp4"
+                        fps = 60
+                    else:
+                        vid_path = '{}/{}'.format(pid, vid)
+                        fps = fps_dict[osp.join(self.root, vid_path + '.MP4')]
                     # start_frame = int(np.round(fps * start_timestamp))
                     # end_frame = int(np.ceil(fps * end_timestamp))
                     self.samples.append((vid_path, start_timestamp, end_timestamp, fps, narration, verb, noun))
@@ -214,6 +233,7 @@ class VideoCaptionDatasetBase(torch.utils.data.Dataset):
                 return frames, (narration, 1)
         elif self.dataset == 'ek100_cls':
             vid_path, start_second, end_second, fps, narration, verb, noun = self.samples[i]
+
             frames = video_loader(self.root, vid_path, 'MP4',
                                   start_second, end_second,
                                   chunk_len=chunk_len, fps=fps,
